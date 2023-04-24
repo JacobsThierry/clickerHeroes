@@ -51,7 +51,7 @@ def spamClickOnRelease(key):
 
 
 mobLocation = (1458, 650)
-clickPerSec = 50
+clickPerSec = 45 #La limite en jeu devrait être 40
 def spamClick(timer: int):
 	
 	global stopSpam
@@ -138,7 +138,13 @@ def loop():
 	k = keyboard.Controller()
 	while(not stopSpam):
 		
-		spamClick(60)
+		#On reste dans chaque niveau le temps de tuer 12 ennemies : ça permet de monter plus vite dans les niveaux.
+		#Je met 12 car je ne connais pas le temps de respawn des ennemies.
+		timePerTick = min(60,(getMonsterHp(getLevel()) * 12)/getDps())
+
+		print("time per tick =", timePerTick)
+
+		spamClick(timePerTick)
 		collectGold()
 		useSpell()
 		buyUpgrade()
@@ -216,7 +222,7 @@ def getLevel():
 	except: _lastLevel = 1
 
 	screenshot = np.array(getScreen().crop(levelTextBox).convert("RGB"))
-	screenshot = dpsImageProcessing(screenshot)
+	screenshot = imageProcessing(screenshot)
 	
 	#je pourrais process la screen plus tard pour avoir de meilleurs résultats
 	text = pytesseract.image_to_string(screenshot)
@@ -253,15 +259,20 @@ def buyUpgrade():
 	m.release(mouse.Button.left)
 	time.sleep(0.1)
 
-	try:
-		if stopSpam:
-			return
-	except: pass
+
 
 	proceeded = []
 
 
-	for i in range(30):
+	for i in range(35):
+
+		try:
+			if stopSpam:
+				return
+		except: pass
+
+		screenshot = getScreen(force=True)
+		screenshot = screenshot.convert("RGB")
 		heroes = shopReader()
 		for hero in heroes:
 			if hero not in proceeded:
@@ -274,8 +285,7 @@ def buyUpgrade():
 				proceeded.append(hero)
 
 
-		screenshot = getScreen(force=True)
-		screenshot = screenshot.convert("RGB")
+
 		#on regarde la scroll bar pour voir si on est en bas ou pas
 		pickedColor = screenshot.getpixel( (925, 1028))
 			
@@ -287,20 +297,18 @@ def buyUpgrade():
 			return
 		
 		for j in range(5):
-			time.sleep(0.01)
 			m.position = scrollDown
-			time.sleep(0.01)
+			time.sleep(0.03)
 			m.press(mouse.Button.left)
 			m.release(mouse.Button.left)
-		time.sleep(0.3)
-		screenshot = getScreen(force=True)
+		time.sleep(0.3) #On attend la fin de l'annimation
 
 
 import cv2 as cv
 import numpy as np
 
 
-def dpsImageProcessing(screenshot):
+def imageProcessing(screenshot):
 	
 	screenshot = cv.GaussianBlur(screenshot, (1, 1), 0)
 	screenshot = cv.cvtColor(screenshot, cv.COLOR_RGB2GRAY)
@@ -326,7 +334,7 @@ def getDps():
 	except: _oldDps = 0
 
 	screenshotDps = np.array(getScreen().crop(dpsTextBox))
-	screenshotDps = dpsImageProcessing(screenshotDps)
+	screenshotDps = imageProcessing(screenshotDps)
 	textDps = pytesseract.image_to_string(screenshotDps)
 	
 	textDps = textDps.strip().lower()
@@ -337,7 +345,7 @@ def getDps():
 	textDps = textDps.replace(",", "")
 
 	screenshotClick = np.array(getScreen().crop(clickDamageBox))
-	screenshotClick = dpsImageProcessing(screenshotClick)
+	screenshotClick = imageProcessing(screenshotClick)
 	textClick = pytesseract.image_to_string(screenshotClick)
 	textClick = textClick.strip().lower()
 	textClick = textClick.replace("click", "").replace("damage", "")
@@ -434,11 +442,11 @@ class heroCard:
 	
 	def buyUpgrades(self):
 		m = mouse.Controller()
-		for i in range(7):
+		for i in range(3 if self.name.lower().strip == "amenhotep" else 7):
 			m.position = (self.cardX + cardUpgradeInitPos[0] + cardUpgradePosIncr * i, self.cardY + cardUpgradeInitPos[1] )
 			m.press(mouse.Button.left)
 			m.release(mouse.Button.left)
-			time.sleep(0.01)
+			time.sleep(0.05)
 	
 	
 	def lvlUpHero(self):
@@ -446,9 +454,9 @@ class heroCard:
 		m.position = (self.cardX + levelUpButton[0], self.cardY + levelUpButton[1])
 		m.press(mouse.Button.left)
 		m.release(mouse.Button.left)
-		time.sleep(0.01)
+		time.sleep(0.05)
 
-
+import os
 
 #return an array with the heroes that can be seen in the shop
 def shopReader() -> list[heroCard]:
@@ -476,7 +484,9 @@ def shopReader() -> list[heroCard]:
 	heroes = []
 	for (startX, startY, endX, endY) in pick:
 		card = cropped[startY : endY, startX : endX  ]
+
 		heroes.append(heroCard(getHeroName(card), getHeroLevel(card), startX + shopLocation[0], startY + shopLocation[1] ))
+		#cv.imwrite(os.path.join("C:\\Users\\thier\\Desktop\\clicker heroes",heroes[-1].name + ".png" ), card )
 
 	return heroes
 		
@@ -487,7 +497,7 @@ nameSize = (488, 40)
 nameBox = selectionToBbox(nameLocation, nameSize)
 def getHeroName(card):
 	nameCropped = cv2CropBBox(card, nameBox)
-	nameCropped = dpsImageProcessing(nameCropped)
+	nameCropped = imageProcessing(nameCropped)
 	text = pytesseract.image_to_string(nameCropped).strip().lower()
 	return text
 
@@ -496,7 +506,7 @@ heroLevelSize = (327, 35)
 heroLevelBox = selectionToBbox(heroLevelLocation, heroLevelSize)
 def getHeroLevel(card):
 	levelCropped = cv2CropBBox(card, heroLevelBox)
-	levelCropped = dpsImageProcessing(levelCropped)
+	levelCropped = imageProcessing(levelCropped)
 	#cv.imshow("eye", np.array(levelCropped))
 	#cv.waitKey(0)
 	

@@ -394,40 +394,162 @@ def getMonsterHp(level : int):
 	
 	return math.ceil( 1.545**(level-200001) * 1.240 * 10**(25409) + (level-1) *10 )
 
-##ça marche po :(((
+
+
+# from https://pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
+def non_max_suppression(boxes, overlapThresh):
+	# if there are no boxes, return an empty list
+	if len(boxes) == 0:
+		return []
+	# if the bounding boxes integers, convert them to floats --
+	# this is important since we'll be doing a bunch of divisions
+	if boxes.dtype.kind == "i":
+		boxes = boxes.astype("float")
+	# initialize the list of picked indexes	
+	pick = []
+	# grab the coordinates of the bounding boxes
+	x1 = boxes[:,0]
+	y1 = boxes[:,1]
+	x2 = boxes[:,2]
+	y2 = boxes[:,3]
+	# compute the area of the bounding boxes and sort the bounding
+	# boxes by the bottom-right y-coordinate of the bounding box
+	area = (x2 - x1 + 1) * (y2 - y1 + 1)
+	idxs = np.argsort(y2)
+	# keep looping while some indexes still remain in the indexes
+	# list
+	while len(idxs) > 0:
+		# grab the last index in the indexes list and add the
+		# index value to the list of picked indexes
+		last = len(idxs) - 1
+		i = idxs[last]
+		pick.append(i)
+		# find the largest (x, y) coordinates for the start of
+		# the bounding box and the smallest (x, y) coordinates
+		# for the end of the bounding box
+		xx1 = np.maximum(x1[i], x1[idxs[:last]])
+		yy1 = np.maximum(y1[i], y1[idxs[:last]])
+		xx2 = np.minimum(x2[i], x2[idxs[:last]])
+		yy2 = np.minimum(y2[i], y2[idxs[:last]])
+		# compute the width and height of the bounding box
+		w = np.maximum(0, xx2 - xx1 + 1)
+		h = np.maximum(0, yy2 - yy1 + 1)
+		# compute the ratio of overlap
+		overlap = (w * h) / area[idxs[:last]]
+		# delete all indexes from the index list that have
+		idxs = np.delete(idxs, np.concatenate(([last],
+			np.where(overlap > overlapThresh)[0])))
+	# return only the bounding boxes that were picked using the
+	# integer data type
+	return boxes[pick].astype("int")
+
+
 shopLocation = (5,290)
 shopSize = (880, 786)
 shopBox = selectionToBbox(shopLocation, shopSize)
-def shopReader():
-	screenshot = getScreen()
-	cropped = np.array(screenshot.crop(shopBox))
-	ret, thresh = cv.threshold(cv.cvtColor(cropped, cv.COLOR_RGB2GRAY) ,120,210,cv.THRESH_BINARY)
-	contours, _ = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-	
-	img = cropped
 
-	for cnt in contours:
-		x1,y1 = cnt[0][0]
-		approx = cv.approxPolyDP(cnt, 0.01*cv.arcLength(cnt, True), True)
-		if len(approx) == 4:
-			x, y, w, h = cv.boundingRect(cnt)
-			ratio = float(w)/h
-			if ratio >= 0.9 and ratio <= 1.1:
-				img = cv.drawContours(img, [cnt], -1, (0,255,255), 3)
-				cv.putText(img, 'Square', (x1, y1), cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-			else:
-				cv.putText(img, 'Rectangle', (x1, y1), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-			img = cv.drawContours(img, [cnt], -1, (0,255,0), 3)
-	cv.imshow("Shapes", img)
-	cv.waitKey(0)
-	cv.destroyAllWindows()
+cardUpgradeInitPos = (313, 132)
+cardUpgradePosIncr = 60
+levelUpButton = (130, 100)
+class heroCard:
+	def __init__(self, name, lvl, cardX, cardY):
+		self.name = name
+		self.lvl = lvl
+		self.cardX = cardX
+		self.cardY = cardY
+	
+	def __eq__(self, o):
+		if isinstance(o, heroCard):
+			return self.name == other.name
+		return False
+	
+	def buyUpgrades(self):
+		m = mouse.Controller()
+		for i in range(7):
+			m.position = (self.startX + cardUpgradeInitPos[0] + cardUpgradePosIncr * i, self.startY + cardUpgradeInitPos[1] )
+			m.press(mouse.Button.left)
+			m.release(mouse.Button.left)
+			time.sleep(0.1)
+	
+	
+	def lvlUpHero(startX, startY):
+		m = mouse.Controller()
+		m.position = (self.startX + levelUpButton[0], self.startY + levelUpButton[1])
+		m.press(mouse.Button.left)
+		m.release(mouse.Button.left)
+
+
+
+#return an array with the heroes that can be seen in the shop
+def shopReader():
+	screenshot = getScreen().convert("RGB")
+	cropped = np.array(screenshot.crop(shopBox))
+	cropped = cropped[:, :, ::-1].copy() 
+	cropped2 = cv.cvtColor(cropped, cv.COLOR_RGB2GRAY)
+	template = cv.imread("pattern1.png", cv.IMREAD_GRAYSCALE)
+	w, h = template.shape[::-1]
+
+	res = cv.matchTemplate(cropped2,template,cv.TM_CCOEFF_NORMED)
+
+	(yCoords, xCoords) = np.where(res >= 0.4)
+	
+
+	rects = []
+	# loop over the starting (x, y)-coordinates again
+	for (x, y) in zip(xCoords, yCoords):
+		# update our list of rectangles
+		rects.append((x, y, x + w, y + h))
+
+	# apply non-maxima suppression to the rectangles
+	pick = non_max_suppression(np.array(rects), 0.2)
+	
+	heroes = []
+	for (startX, startY, endX, endY) in pick:
+		card = cropped[startY : endY, startX : endX  ]
+		heroes.append(heroCard(getHeroName(card), getHeroLevel(card), startX + shopLocation[0], startY + shopLocation[1] ))
+
+	return heroes
+		
+
+
+nameLocation = (251, 12)
+nameSize = (488, 40)
+nameBox = selectionToBbox(nameLocation, nameSize)
+def getHeroName(card):
+	nameCropped = cv2CropBBox(card, nameBox)
+	nameCropped = dpsImageProcessing(nameCropped)
+	text = pytesseract.image_to_string(nameCropped).strip().lower()
+	return text
+
+heroLevelLocation = (398, 55)
+heroLevelSize = (327, 35)
+heroLevelBox = selectionToBbox(heroLevelLocation, heroLevelSize)
+def getHeroLevel(card):
+	levelCropped = cv2CropBBox(card, heroLevelBox)
+	levelCropped = dpsImageProcessing(levelCropped)
+	#cv.imshow("eye", np.array(levelCropped))
+	#cv.waitKey(0)
+	
+	text = pytesseract.image_to_string(levelCropped).strip().lower().replace("lvl", "").replace("lv!", "").strip()
+	try:
+		return int(text)
+	except:
+		return -1
+
+
+def cv2CropBBox(img, bbox):
+	return img[bbox[1] : bbox[3], bbox[0] : bbox[2] ]
+
+
+
+
 
 pytesseract.pytesseract.tesseract_cmd = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 wait()
 
-loop()
+#loop()
 
-#shopReader()
+shopReader()
 
 #buyUpgrade()
 #print(f"{getDps():e}")

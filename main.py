@@ -7,11 +7,11 @@ import random
 _latestScreen = -1
 
 screenRate = 5
-def getScreen():
+def getScreen(force=False):
 	global _screenshot
 	global _latestScreen
 
-	if(_latestScreen == -1 or time.time() - _latestScreen > screenRate ):
+	if(force or _latestScreen == -1 or time.time() - _latestScreen > screenRate ):
 		_screenshot = ImageGrab.grab()
 	
 	return _screenshot
@@ -245,9 +245,6 @@ upgradeposincr = 60
 upgradeCount = 7
 def buyUpgrade():
 
-	if stopSpam:
-		return
-
 	m = mouse.Controller()
 	#reset du scroll
 	m.position = resetScroll
@@ -256,75 +253,47 @@ def buyUpgrade():
 	m.release(mouse.Button.left)
 	time.sleep(0.1)
 
-	
-	for h in initPosition:
+	try:
 		if stopSpam:
 			return
-		for i in range(upgradeCount):#on achète les upgrades
-			time.sleep(0.01)
-			m.position = (upgradepos + upgradeposincr * i, h[1])
-			time.sleep(0.01)
-			m.press(mouse.Button.left)
-			m.release(mouse.Button.left)
+	except: pass
 
-		#Le scroll inconsistant fait que les premiers heros ne sont que peu achetés : on les spam
-		for k in range(5):
-			time.sleep(0.01)
-			m.position = h
+	proceeded = []
+
+
+	for i in range(30):
+		heroes = shopReader()
+		for hero in heroes:
+			if hero not in proceeded:
+				print(hero.name)
+				hero.buyUpgrades()
+
+
+				for k in range(10 if hero.lvl < 11 else 1 ):
+					hero.lvlUpHero()
+				proceeded.append(hero)
+
+
+		screenshot = getScreen(force=True)
+		screenshot = screenshot.convert("RGB")
+		#on regarde la scroll bar pour voir si on est en bas ou pas
+		pickedColor = screenshot.getpixel( (925, 1028))
 			
-			for g in range(10):
-				m.press(mouse.Button.left)
-				m.release(mouse.Button.left)
-				time.sleep(0.01)
+		#print( tuple( 255 * elem for elem in colour.Color("#ffdc2b").rgb ))
 
-		
-	#On fait en sorte que le prochain hero soit en bas de la liste
-	for i in range(4):
-		time.sleep(0.01)
-		m.position = scrollDown
-		time.sleep(0.01)
-		m.press(mouse.Button.left)
-		m.release(mouse.Button.left)
-	
-	for i in range(20):
-		if stopSpam:
+		dist = distance(pickedColor, tuple( 255 * elem for elem in colour.Color("#ffdc2b").rgb ) )
+
+		if(dist < 50):
 			return
-
-		for j in range(upgradeCount):#on achète les upgrades
-			time.sleep(0.01)
-			m.position = (upgradepos + upgradeposincr * j, downPos[1])
-			m.press(mouse.Button.left)
-			m.release(mouse.Button.left)
-
-		time.sleep(0.01)
-		m.position = downPos
-		time.sleep(0.01)
-		for g in range(10):
-			m.press(mouse.Button.left)
-			m.release(mouse.Button.left)
-			time.sleep(0.01)
 		
-
-		#J'ai l'impression d'avoir des inconsistances avec le scroll. Je crois que ça scroll un % du total, ce qui pose problème avec le nombre de héro qui augmente. Donc je vais scroll trop de fois pour ne rien rater
-		for j in range(scrollOneDown ):
+		for j in range(5):
 			time.sleep(0.01)
 			m.position = scrollDown
 			time.sleep(0.01)
 			m.press(mouse.Button.left)
 			m.release(mouse.Button.left)
-		
-		screenshot = ImageGrab.grab()
-		screenshot = screenshot.convert("RGB")
-		#on regarde la scroll bar pour voir si on est en bas ou pas
-		pickedColor = screenshot.getpixel( (925, 1028))
-		
-		#print( tuple( 255 * elem for elem in colour.Color("#ffdc2b").rgb ))
-
-		dist = distance(pickedColor, tuple( 255 * elem for elem in colour.Color("#ffdc2b").rgb ) )
-		#print("dist = ", dist)
-		if(dist < 50):
-			return
-
+		time.sleep(0.3)
+		screenshot = getScreen(force=True)
 
 
 import cv2 as cv
@@ -460,28 +429,29 @@ class heroCard:
 	
 	def __eq__(self, o):
 		if isinstance(o, heroCard):
-			return self.name == other.name
+			return self.name == o.name
 		return False
 	
 	def buyUpgrades(self):
 		m = mouse.Controller()
 		for i in range(7):
-			m.position = (self.startX + cardUpgradeInitPos[0] + cardUpgradePosIncr * i, self.startY + cardUpgradeInitPos[1] )
+			m.position = (self.cardX + cardUpgradeInitPos[0] + cardUpgradePosIncr * i, self.cardY + cardUpgradeInitPos[1] )
 			m.press(mouse.Button.left)
 			m.release(mouse.Button.left)
-			time.sleep(0.1)
+			time.sleep(0.01)
 	
 	
-	def lvlUpHero(startX, startY):
+	def lvlUpHero(self):
 		m = mouse.Controller()
-		m.position = (self.startX + levelUpButton[0], self.startY + levelUpButton[1])
+		m.position = (self.cardX + levelUpButton[0], self.cardY + levelUpButton[1])
 		m.press(mouse.Button.left)
 		m.release(mouse.Button.left)
+		time.sleep(0.01)
 
 
 
 #return an array with the heroes that can be seen in the shop
-def shopReader():
+def shopReader() -> list[heroCard]:
 	screenshot = getScreen().convert("RGB")
 	cropped = np.array(screenshot.crop(shopBox))
 	cropped = cropped[:, :, ::-1].copy() 
@@ -491,7 +461,7 @@ def shopReader():
 
 	res = cv.matchTemplate(cropped2,template,cv.TM_CCOEFF_NORMED)
 
-	(yCoords, xCoords) = np.where(res >= 0.4)
+	(yCoords, xCoords) = np.where(res >= 0.3)
 	
 
 	rects = []
@@ -547,9 +517,11 @@ def cv2CropBBox(img, bbox):
 pytesseract.pytesseract.tesseract_cmd = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 wait()
 
-#loop()
+loop()
 
-shopReader()
+#buyUpgrade()
+
+#shopReader()
 
 #buyUpgrade()
 #print(f"{getDps():e}")

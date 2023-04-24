@@ -51,7 +51,7 @@ def spamClickOnRelease(key):
 
 
 mobLocation = (1458, 650)
-clickPerSec = 45 #La limite en jeu devrait être 40
+clickPerSec = 39 #La limite en jeu devrait être 40
 def spamClick(timer: int):
 	
 	global stopSpam
@@ -140,17 +140,31 @@ def loop():
 		
 		#On reste dans chaque niveau le temps de tuer 12 ennemies : ça permet de monter plus vite dans les niveaux.
 		#Je met 12 car je ne connais pas le temps de respawn des ennemies.
-		timePerTick = min(60,(getMonsterHp(getLevel()) * 12)/getDps())
+		timePerTick = 60 if getDps() == 0 else max(30,min(60,(getMonsterHp(getLevel()) * 12)/getDps()))
 
 		print("time per tick =", timePerTick)
 
 		spamClick(timePerTick)
+		time.sleep(0.2)
 		collectGold()
+		time.sleep(0.1)
 		useSpell()
+		time.sleep(0.1)
 		buyUpgrade()
 
 
 		level = print("Level = ", getLevel(), " hp des ennemies = ", f"{getMonsterHp(getLevel()):e}" )
+
+		try:
+			screenshot = getScreen()
+			#on regarde la couleur du gift
+			pickedColor = screenshot.getpixel( (1798, 887))
+			dist = distance(pickedColor, tuple( 255 * elem for elem in colour.Color("#e93351").rgb ) )
+
+			if dist < 50:
+				openGift()
+		except:
+			pass
 
 		try:
 			print("DPS = ", f"{getDps():e}" )
@@ -296,12 +310,12 @@ def buyUpgrade():
 		if(dist < 50):
 			return
 		
-		for j in range(5):
+		for j in range(4):
 			m.position = scrollDown
 			time.sleep(0.03)
 			m.press(mouse.Button.left)
 			m.release(mouse.Button.left)
-		time.sleep(0.3) #On attend la fin de l'annimation
+		time.sleep(1) #On attend la fin de l'annimation
 
 
 import cv2 as cv
@@ -339,7 +353,7 @@ def getDps():
 	
 	textDps = textDps.strip().lower()
 	
-	textDps = textDps.replace("dps", "")
+	textDps = textDps[0: textDps.index("dps") ]
 	
 	textDps = textDps.strip().lower()
 	textDps = textDps.replace(",", "")
@@ -363,14 +377,25 @@ def getDps():
 
 
 def getMonsterHp(level : int):
-	isboss = 10 if level%5 == 0 else 1
-	if level < 140:
-		return math.ceil(10 * (level - 1 + 1.55**(level - 1)) * isboss)
-	if level < 500:
-		return math.ceil( 10 * (139 + 1.55**(139) * 1.145**(level - 140) * isboss) )
-	
-	return math.ceil( 1.545**(level-200001) * 1.240 * 10**(25409) + (level-1) *10 )
 
+	hp = 0
+	global _monsterHp
+
+	try: _monsterHp
+	except: _monsterHp = 0
+
+	try:
+		isboss = 10 if level%5 == 0 else 1
+		if level < 141:
+			hp = math.ceil(10 * (level - 1 + int(1.55**(level - 1))) * isboss)
+		elif level < 500:
+			hp = math.ceil( 10 * (139 + (155**(139))//100 * (1145**(level - 140))//1000 * isboss) )
+		else:
+			hp = math.ceil( (1545**(level-200001))//1000 * (1240 * 10**(25409))//1000 + (level-1) * 10 )
+		_monsterHp = hp
+		return hp
+	except:
+		return _monsterHp
 
 
 # from https://pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
@@ -522,12 +547,31 @@ def cv2CropBBox(img, bbox):
 
 
 
+def openGift():
+	m = mouse.Controller()
+	m.position = (1838, 918)
+	m.press(mouse.Button.left)
+	m.release(mouse.Button.left)
+	time.sleep(1.5)
+	m.position = (948, 557)
+	m.press(mouse.Button.left)
+	m.release(mouse.Button.left)
+	time.sleep(1.5)
+	m.position = (1553, 170)
+
+
 
 
 pytesseract.pytesseract.tesseract_cmd = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 wait()
 
-loop()
+#loop()
+openGift()
+
+#buyUpgrade()
+#buyUpgrade()
+
+#openGift()
 
 #buyUpgrade()
 

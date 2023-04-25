@@ -140,7 +140,7 @@ def loop():
 		
 		#On reste dans chaque niveau le temps de tuer 12 ennemies : ça permet de monter plus vite dans les niveaux.
 		#Je met 12 car je ne connais pas le temps de respawn des ennemies.
-		timePerTick = 60 if getDps() == 0 else max(30,min(60,(getMonsterHp(getLevel()) * 12)/getDps()))
+		timePerTick = 60 if getDps() == 0 else max(30,min(60,(getMonsterHp(getLevel()) * 12)//getDps()))
 
 		print("time per tick =", timePerTick)
 
@@ -228,7 +228,7 @@ levelTextBox = selectionToBbox(levelTextLocation, levelTextSize)
 import re
 
 
-def getLevel():
+def getLevel() -> int:
 
 	global _lastLevel
 
@@ -256,15 +256,15 @@ scrollUp = (927, 321)
 scrollDown = (927, 1053)
 resetScroll = (927, 380)
 scrollOneDown = 2
-
 initPosition = [ (160,428), (160,610), (160,790), (160, 970), ] #on fait les 4 premiers personnages a part
 downPos = (160, 1031)
 
 upgradepos = 320 #position x de la 1e upgrade
 upgradeposincr = 60
 upgradeCount = 7
-def buyUpgrade():
 
+#remet le shop tout en haut
+def resetShop():
 	m = mouse.Controller()
 	#reset du scroll
 	m.position = resetScroll
@@ -273,20 +273,39 @@ def buyUpgrade():
 	m.release(mouse.Button.left)
 	time.sleep(0.1)
 
+#scroll le shop
+def scrollShop(scrollCount=4):
+	m = mouse.Controller()
+	for j in range(scrollCount):
+		m.position = scrollDown
+		time.sleep(0.03)
+		m.press(mouse.Button.left)
+		m.release(mouse.Button.left)
+	time.sleep(1) #On attend la fin de l'annimation
 
+#verifie si on est en bas du shop
+def isAtShopBottom():
+		screenshot = getScreen(force=True)
+		#on regarde la scroll bar pour voir si on est en bas ou pas
+		pickedColor = screenshot.getpixel( (925, 1028))
+		#print( tuple( 255 * elem for elem in colour.Color("#ffdc2b").rgb ))
 
+		dist = distance(pickedColor, tuple( 255 * elem for elem in colour.Color("#ffdc2b").rgb ) )
+
+		return dist < 50
+
+def buyUpgrade():
+	m = mouse.Controller()
+	resetShop()
 	proceeded = []
-
 
 	for i in range(35):
 
 		try:
 			if stopSpam:
 				return
-		except: pass
+		except: stopSpam = False
 
-		screenshot = getScreen(force=True)
-		screenshot = screenshot.convert("RGB")
 		heroes = shopReader()
 		for hero in heroes:
 			if hero not in proceeded:
@@ -298,24 +317,12 @@ def buyUpgrade():
 					hero.lvlUpHero()
 				proceeded.append(hero)
 
+		scrollShop()
 
-
-		#on regarde la scroll bar pour voir si on est en bas ou pas
-		pickedColor = screenshot.getpixel( (925, 1028))
-			
-		#print( tuple( 255 * elem for elem in colour.Color("#ffdc2b").rgb ))
-
-		dist = distance(pickedColor, tuple( 255 * elem for elem in colour.Color("#ffdc2b").rgb ) )
-
-		if(dist < 50):
+		if(isAtShopBottom()):
 			return
 		
-		for j in range(4):
-			m.position = scrollDown
-			time.sleep(0.03)
-			m.press(mouse.Button.left)
-			m.release(mouse.Button.left)
-		time.sleep(1) #On attend la fin de l'annimation
+
 
 
 import cv2 as cv
@@ -340,7 +347,7 @@ dpsTextBox = selectionToBbox(dpsTextLocation, dpsTextSize)
 clickDamageLocation = (30, 250)
 clickDamageSize = (548, 38)
 clickDamageBox = selectionToBbox(clickDamageLocation, clickDamageSize)
-def getDps():
+def getDps() -> int:
 
 	global _oldDps
 
@@ -366,7 +373,8 @@ def getDps():
 
 	
 	try:
-		dps = float(textDps) + float(textClick) * clickPerSec
+		dps = textDps + textClick * clickPerSec
+		dps = int(dps)
 		if dps == 0:
 			dps = _oldDps
 		else:
@@ -376,7 +384,7 @@ def getDps():
 	return dps
 
 
-def getMonsterHp(level : int):
+def getMonsterHp(level : int) -> int:
 
 	hp = 0
 	global _monsterHp
@@ -465,13 +473,18 @@ class heroCard:
 			return self.name == o.name
 		return False
 	
+	def buyUpgrade(self, noUpgrade):
+		m = mouse.Controller()
+		m.position = (self.cardX + cardUpgradeInitPos[0] + cardUpgradePosIncr * noUpgrade, self.cardY + cardUpgradeInitPos[1] )
+		m.press(mouse.Button.left)
+		m.release(mouse.Button.left)
+		time.sleep(0.1)
+
 	def buyUpgrades(self):
 		m = mouse.Controller()
 		for i in range(3 if self.name.lower().strip == "amenhotep" else 7):
-			m.position = (self.cardX + cardUpgradeInitPos[0] + cardUpgradePosIncr * i, self.cardY + cardUpgradeInitPos[1] )
-			m.press(mouse.Button.left)
-			m.release(mouse.Button.left)
-			time.sleep(0.05)
+			print(self.name.lower().strip == "amenhotep", " ", self.name.lower().strip())
+			self.buyUpgrade(i)
 	
 	
 	def lvlUpHero(self):
@@ -483,9 +496,13 @@ class heroCard:
 
 import os
 
+
+
+
+
 #return an array with the heroes that can be seen in the shop
 def shopReader() -> list[heroCard]:
-	screenshot = getScreen().convert("RGB")
+	screenshot = getScreen(force=True).convert("RGB")
 	cropped = np.array(screenshot.crop(shopBox))
 	cropped = cropped[:, :, ::-1].copy() 
 	cropped2 = cv.cvtColor(cropped, cv.COLOR_RGB2GRAY)
@@ -558,15 +575,18 @@ def openGift():
 	m.release(mouse.Button.left)
 	time.sleep(1.5)
 	m.position = (1553, 170)
-
+	m.press(mouse.Button.left)
+	m.release(mouse.Button.left)
 
 
 
 pytesseract.pytesseract.tesseract_cmd = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 wait()
 
+buyUpgrade()
+
 #loop()
-openGift()
+#openGift()
 
 #buyUpgrade()
 #buyUpgrade()
